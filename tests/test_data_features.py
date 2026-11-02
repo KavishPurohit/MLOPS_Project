@@ -55,3 +55,7 @@ def test_metrics_and_asymmetric_score():
 def test_subset_selector_rejects_unknown_filesets():
     with pytest.raises(ValueError,match="FD001, FD002"):
         load_subset("FD005", "missing")
+
+def test_intentional_ci_failure_for_practical_demo():
+    """Temporary failing check to demonstrate GitHub Actions failure handling."""
+    assert False, "Intentional failure for the CI practical demonstration."
