@@ -1,23 +1,15 @@
 variable "image_name" {
   type    = string
-  default = "cmapss-rul-terraform:local"
+  default = "cmapss-rul:latest"
 }
 variable "host_port" {
   type    = number
   default = 8000
 }
 
-resource "docker_image" "rul_api" {
-  name = var.image_name
-  build {
-    context    = ".."
-    dockerfile = "Dockerfile"
-  }
-}
-
 resource "docker_container" "rul_api" {
   name  = "cmapss-rul-terraform"
-  image = docker_image.rul_api.image_id
+  image = var.image_name
   ports {
     internal = 8000
     external = var.host_port

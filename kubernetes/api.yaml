@@ -25,10 +25,6 @@ spec:
           resources:
             requests: {cpu: 100m, memory: 256Mi}
             limits: {cpu: "1", memory: 1Gi}
-          volumeMounts: [{name: model, mountPath: /app/models, readOnly: true}]
-      volumes:
-        - name: model
-          hostPath: {path: /mnt/cmapss-model, type: Directory}
 ---
 apiVersion: v1
 kind: Service
