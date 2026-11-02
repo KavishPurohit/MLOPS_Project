@@ -4,7 +4,7 @@ An integrated classroom project estimating aircraft-engine Remaining Useful Life
 
 ## Scope and data status
 
-The seven source experiment documents mentioned in the request were not present anywhere under the active Documents tree. This implementation follows the pasted specification, and does not alter any original documents. The NASA archive is downloaded locally but ignored by Git; trained model/evaluation artifacts are likewise generated locally and ignored. No predictions, scores, or deployments are fabricated.
+The supplied experiment documents are preserved unchanged in the user's `Downloads/MLOPS` folder. Their objectives and the corresponding C-MAPSS implementations are mapped in [`docs/experiment-coverage.md`](docs/experiment-coverage.md). Generic Iris, marks-classification, and NGINX examples in those teaching documents are adapted to the requested aircraft RUL project. The NASA archive is downloaded locally but ignored by Git; trained model/evaluation artifacts are likewise generated locally and ignored. No predictions, scores, or deployments are fabricated.
 
 Download NASA C-MAPSS from the [NASA dataset page](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data) or its [official ZIP resource](https://data.nasa.gov/docs/legacy/CMAPSSData.zip), follow the terms shown there (the NASA catalog currently lists the license as unspecified), extract `CMAPSSData.zip`, and copy `train_FD001.txt`, `test_FD001.txt`, and `RUL_FD001.txt` into `data/raw/`.
 
