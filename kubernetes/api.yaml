@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rul-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app: rul-api}
+  template:
+    metadata:
+      labels: {app: rul-api}
+    spec:
+      containers:
+        - name: api
+          image: cmapss-rul:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{containerPort: 8000}]
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 15
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          volumeMounts: [{name: model, mountPath: /app/models, readOnly: true}]
+      volumes:
+        - name: model
+          hostPath: {path: /mnt/cmapss-model, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rul-api
+spec:
+  selector: {app: rul-api}
+  ports: [{name: http, port: 8000, targetPort: 8000}]
+  type: ClusterIP

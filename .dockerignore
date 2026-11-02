@@ -1,0 +1,10 @@
+.git
+.venv
+venv
+__pycache__
+.pytest_cache
+data/raw
+data/processed
+mlruns
+models/*.joblib
+models/evaluation.json
