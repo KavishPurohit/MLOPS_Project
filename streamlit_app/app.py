@@ -66,15 +66,15 @@ elif page == "Model Evaluation":
         result=json.loads(p.read_text()); st.metric("Selected model",result["selected_model"]); st.json(result["test"])
     else: st.info("Evaluation requires a trained model and NASA test RUL labels. No metrics are fabricated.")
 elif page == "RUL Prediction":
-    source=st.radio("History source",["Upload CSV","Example training engine"],horizontal=True)
+    source=st.radio("History source",["Upload CSV","Example test engine"],horizontal=True)
     uploaded=st.file_uploader("Upload an engine sensor-history CSV",type="csv") if source == "Upload CSV" else None
     engine_frame=None
-    if source == "Example training engine":
+    if source == "Example test engine":
         pack=dataset_or_message()
         if pack:
-            train_df,_,_=pack
-            chosen=st.selectbox("Training engine",sorted(train_df.engine_id.unique()))
-            engine_frame=train_df[train_df.engine_id==chosen][["engine_id","cycle",*FEATURES]]
+            _,test_df,_=pack
+            chosen=st.selectbox("Test engine",sorted(test_df.engine_id.unique()))
+            engine_frame=test_df[test_df.engine_id==chosen][["engine_id","cycle",*FEATURES]]
     api=st.text_input("Prediction API",os.getenv("API_URL","http://localhost:8000"))
     if (uploaded or engine_frame is not None) and st.button("Estimate remaining cycles"):
         content=uploaded.getvalue() if uploaded else engine_frame.to_csv(index=False).encode()
