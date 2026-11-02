@@ -54,8 +54,7 @@ With Docker Desktop running and a trained model: `docker compose up --build`. Se
 For kind/Minikube, first build and load image, then apply and scale:
 
 ```powershell
-docker build -t cmapss-rul:latest .
-kind load docker-image cmapss-rul:latest
+docker build -f Dockerfile.k8s -t cmapss-rul:latest .
 kubectl apply -f kubernetes/api.yaml
 kubectl get deploy,svc,pods
 kubectl scale deployment/rul-api --replicas=5
@@ -64,9 +63,9 @@ kubectl port-forward service/rul-api 8000:8000
 kubectl delete -f kubernetes/api.yaml
 ```
 
-The manifest starts at 3 replicas. Supply the model at `/mnt/cmapss-model` or adapt the volume for your cluster. Verify ready replicas before claiming scaling success.
+The manifest starts at 3 replicas. `Dockerfile.k8s` bundles the locally trained model into the image, so the deployment does not depend on a machine-specific host path. Verify ready replicas before claiming scaling success.
 
-Terraform manages a separately named Docker container; don't run it with Compose on the same port. From `terraform/`: `terraform init`, `terraform validate`, `terraform plan -out tfplan`, `terraform apply tfplan`, `terraform output`, `terraform destroy`.
+Terraform manages a separately named Docker container; don't run it with Compose on the same port. Build the image above first, then from `terraform/` run `terraform init`, `terraform validate`, `terraform plan -out tfplan -var="host_port=8001"`, `terraform apply tfplan`, `terraform output`, and `terraform destroy -var="host_port=8001"`.
 
 ## Git and CI
 
