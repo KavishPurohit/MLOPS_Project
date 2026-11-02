@@ -2,6 +2,7 @@ from pathlib import Path
 import sys, json, os
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import requests
 import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,8 +31,19 @@ def dataset_or_message():
 if page == "Project Overview":
     st.subheader("From sensor history to maintenance planning")
     st.write("A connected workflow ingests run-to-failure histories, constructs engine-aware features, compares regressors, serves estimates with FastAPI, and exposes operational telemetry.")
-    a,b,c=st.columns(3); a.metric("Starter subset","FD001"); b.metric("Input signals","3 settings + 21 sensors"); c.metric("Prediction unit","one engine history")
-    st.graphviz_chart('digraph {rankdir=LR; NASA->ETL->FeatureStore->Training->Model; Model->FastAPI->Streamlit; FastAPI->Prometheus->Grafana; GitHubActions->Tests; Terraform->Docker; Kubernetes->API}')
+    model_file=ROOT/"models/best_model.joblib"
+    eval_file=ROOT/"models/evaluation.json"
+    scores=json.loads(eval_file.read_text()) if eval_file.exists() else None
+    a,b,c=st.columns(3); a.metric("Starter subset","FD001"); b.metric("Input signals","3 settings + 21 sensors"); c.metric("Selected model",scores["selected_model"] if scores else "Awaiting training")
+    if scores:
+        d,e,f=st.columns(3); d.metric("Test MAE",f"{scores['test']['mae']:.2f} cycles"); e.metric("Test RMSE",f"{scores['test']['rmse']:.2f} cycles"); f.metric("Test R²",f"{scores['test']['r2']:.3f}")
+    if model_file.exists(): st.caption("Metrics shown were produced by the latest local training run using official FD001 test labels.")
+    labels=["NASA FD001","Validated ETL","Feature store","MLflow training","RUL model","FastAPI","Streamlit","Prometheus","Grafana","GitHub Actions","Kubernetes","Terraform"]
+    sources=[0,1,2,3,4,5,5,9,4,4]
+    targets=[1,2,3,4,5,6,7,3,10,11]
+    fig=go.Figure(go.Sankey(node={"label":labels,"pad":18,"thickness":18,"color":"#167d8d"},link={"source":sources,"target":targets,"value":[1]*len(sources),"color":"rgba(22,125,141,.22)"}))
+    fig.update_layout(height=400,margin={"l":10,"r":10,"t":10,"b":10},font={"size":12})
+    st.plotly_chart(fig,use_container_width=True)
     st.caption("Model quality values appear after a training run against official labels.")
 elif page == "Dataset Explorer":
     pack=dataset_or_message()
@@ -63,7 +75,15 @@ elif page == "Model Experiments":
 elif page == "Model Evaluation":
     p=ROOT/"models/evaluation.json"
     if p.exists():
-        result=json.loads(p.read_text()); st.metric("Selected model",result["selected_model"]); st.json(result["test"])
+        result=json.loads(p.read_text()); actual=pd.read_csv(ROOT/"models/test_predictions.csv")
+        m=result["test"]; c1,c2,c3,c4=st.columns(4)
+        c1.metric("Model",result["selected_model"]); c2.metric("MAE",f"{m['mae']:.2f} cycles"); c3.metric("RMSE",f"{m['rmse']:.2f} cycles"); c4.metric("R²",f"{m['r2']:.3f}")
+        fig=px.scatter(actual,x="actual_rul",y="predicted_rul",hover_data=["engine_id","error"],title="Predicted vs actual RUL on held-out test engines")
+        bound=max(actual.actual_rul.max(),actual.predicted_rul.max())
+        fig.add_shape(type="line",x0=0,y0=0,x1=bound,y1=bound,line={"dash":"dash","color":"#0f766e"})
+        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(px.histogram(actual,x="error",nbins=20,title="Per-engine prediction error (predicted − actual)"),use_container_width=True)
+        st.dataframe(actual,use_container_width=True)
     else: st.info("Evaluation requires a trained model and NASA test RUL labels. No metrics are fabricated.")
 elif page == "RUL Prediction":
     source=st.radio("History source",["Upload CSV","Example test engine"],horizontal=True)
@@ -85,6 +105,12 @@ elif page == "RUL Prediction":
     st.caption("CSV columns: cycle, op_setting_1..3, sensor_1..21; engine_id is optional.")
 elif page == "Monitoring":
     endpoint=st.text_input("Prometheus API",os.getenv("PROMETHEUS_URL","http://localhost:9090"))
+    api_endpoint=st.text_input("Prediction API",os.getenv("API_URL","http://localhost:8000"))
+    try:
+        health=requests.get(f"{api_endpoint}/health",timeout=3).json()
+        st.success(f"API healthy · model: {health.get('model','unknown')}")
+    except Exception as e:
+        st.error(f"API health unavailable: {e}")
     for title,query in [("Prediction requests","rul_prediction_requests_total"),("Error requests","rul_prediction_requests_total{status=\"error\"}"),("Latency p95","histogram_quantile(0.95, sum(rate(rul_prediction_latency_seconds_bucket[5m])) by (le))")]:
         try:
             r=requests.get(f"{endpoint}/api/v1/query",params={"query":query},timeout=3).json()["data"]["result"]
@@ -93,5 +119,15 @@ elif page == "Monitoring":
     st.caption("Operational metrics describe service behavior. Model quality against labels is offline and shown in Model Evaluation.")
 elif page == "MLOps Pipeline":
     st.subheader("Lifecycle runbook")
+    statuses=st.columns(4)
+    statuses[0].metric("Dataset","Ready" if (RAW_DIR/"train_FD001.txt").exists() else "Missing")
+    statuses[1].metric("Model","Trained" if (ROOT/"models/best_model.joblib").exists() else "Missing")
+    statuses[2].metric("CI workflow","Configured" if (ROOT/".github/workflows/ci.yml").exists() else "Missing")
+    statuses[3].metric("Monitoring config","Configured" if (ROOT/"monitoring/prometheus.yml").exists() else "Missing")
+    deploy_status=st.columns(3)
+    deploy_status[0].metric("Docker Compose","Configured" if (ROOT/"docker-compose.yml").exists() else "Missing")
+    deploy_status[1].metric("Kubernetes","3-replica manifest" if (ROOT/"kubernetes/api.yaml").exists() else "Missing")
+    deploy_status[2].metric("Terraform","Plan generated" if (ROOT/"terraform/tfplan").exists() else "Configured")
+    st.caption("GitHub, Docker, Kubernetes, and Terraform runtime status requires checking the relevant remote or local service; configuration files alone do not imply successful deployment.")
     st.markdown("1. Git: branch from main, commit focused changes, open a pull request.\n2. CI: GitHub Actions runs pytest on pushes and pull requests.\n3. Container: `docker compose up --build` runs API and dashboard.\n4. Kubernetes: `kubectl apply -f kubernetes/`; scale with `kubectl scale deployment/rul-api --replicas=5`.\n5. Terraform: use `terraform/` independently to manage one Docker API container.\n6. Monitoring: Prometheus scrapes `/metrics`; Grafana dashboard is provisioned from `monitoring/`.")
     st.write("Scrum artifacts and practical checklist are in `docs/`.")

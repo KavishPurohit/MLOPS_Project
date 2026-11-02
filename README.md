@@ -4,9 +4,9 @@ An integrated classroom project estimating aircraft-engine Remaining Useful Life
 
 ## Scope and data status
 
-The seven source experiment documents mentioned in the request were not present in the active workspace. This implementation follows the pasted specification, and does not alter any original documents. NASA data and trained model artifacts are intentionally not included. No predictions, scores, or deployments are fabricated.
+The seven source experiment documents mentioned in the request were not present anywhere under the active Documents tree. This implementation follows the pasted specification, and does not alter any original documents. The NASA archive is downloaded locally but ignored by Git; trained model/evaluation artifacts are likewise generated locally and ignored. No predictions, scores, or deployments are fabricated.
 
-Download NASA C-MAPSS from the [NASA dataset page](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data), follow the terms shown there, extract `CMAPSSData.zip`, and copy `train_FD001.txt`, `test_FD001.txt`, and `RUL_FD001.txt` into `data/raw/`.
+Download NASA C-MAPSS from the [NASA dataset page](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data) or its [official ZIP resource](https://data.nasa.gov/docs/legacy/CMAPSSData.zip), follow the terms shown there (the NASA catalog currently lists the license as unspecified), extract `CMAPSSData.zip`, and copy `train_FD001.txt`, `test_FD001.txt`, and `RUL_FD001.txt` into `data/raw/`.
 
 NASA rows are whitespace-delimited: engine ID, cycle, three operating settings, and 21 sensors. Training RUL is the engine's last observed cycle minus the current cycle (training target capped at 125). NASA's test RUL file contains one label per test engine: cycles remaining after its final observed row. The loader adds each row's cycles remaining until that final row. The dataset's engine ordering pairs test histories with the labels.
 
@@ -21,7 +21,7 @@ Raw data → validation and RUL labels → shared sequential feature transforms 
 In PowerShell from this folder:
 
 ```powershell
-py -3.11 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
@@ -37,13 +37,15 @@ python -m src.train --raw-dir data/raw
 
 The training script compares scaled Linear Regression, Random Forest, and Gradient Boosting. `GroupShuffleSplit` keeps engines separate across train/validation; features use current and past readings only. Lowest validation RMSE is refit on all training engines, then evaluated once against official test labels. MAE, RMSE, R² and the asymmetric NASA PHM08 score go to MLflow and `models/evaluation.json`.
 
+Latest actual FD001 run (seed 42, RUL cap 125): held-out engine-wise validation RMSE was 14.58 for Linear Regression, 12.47 for Random Forest, and 12.60 for Gradient Boosting. Random Forest was selected. On the separate 100-engine NASA test set, the measured MAE was 8.88 cycles, RMSE 13.01 cycles, R² 0.895, and NASA score 306.00. These outputs are local run artifacts, not committed results; rerunning training replaces them.
+
 ## Run locally
 
-Backend (requires trained model): `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`. API docs: `http://127.0.0.1:8000/docs`; metrics: `/metrics`.
+Backend (requires trained model): `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`. API docs: `http://127.0.0.1:8000/docs`; Prometheus metrics: `http://127.0.0.1:8000/metrics/`.
 
-Dashboard: `streamlit run streamlit_app/app.py` (default `http://localhost:8501`). MLflow UI: `mlflow ui --backend-store-uri ./mlruns --host 127.0.0.1 --port 5000`.
+Dashboard: `streamlit run streamlit_app/app.py` (default `http://localhost:8501`). MLflow UI: `mlflow ui --backend-store-uri sqlite:///./mlflow.db --host 127.0.0.1 --port 5000`.
 
-Dashboard pages: Project Overview, Dataset Explorer, EDA, ETL & Feature Store, Model Experiments, Model Evaluation, RUL Prediction via CSV upload, Monitoring, and MLOps Pipeline. Data/model/monitoring sections show setup states until real data and artifacts exist.
+Dashboard pages: Project Overview, Dataset Explorer, EDA, ETL & Feature Store, Model Experiments, Model Evaluation, RUL Prediction from a selected test engine or CSV upload, Monitoring, and MLOps Pipeline. Data/model/monitoring sections show setup states until real data and artifacts exist.
 
 ## Container and infrastructure commands
 
@@ -79,7 +81,14 @@ git switch main
 git merge --no-ff feature/etl-model
 ```
 
-Create an empty GitHub repository, set its remote, then push `main`. `.github/workflows/ci.yml` runs pytest on push and pull request. Hosted run status requires an actual push and is not claimed here. The practical checklist explains how to record one real passing and one intentionally failing CI run.
+Create an empty GitHub repository named `cmapss-rul-mlops`, then set its remote and push:
+
+```powershell
+git remote add origin https://github.com/<your-username>/cmapss-rul-mlops.git
+git push -u origin main
+```
+
+`.github/workflows/ci.yml` downloads the official FD001 files, trains and logs real experiments, and runs data, model-prediction, and API tests on each push and pull request. Check the repository's Actions tab for actual hosted run status. The practical checklist explains how to record a successful run and a deliberately failing test on a temporary branch, then restore green.
 
 ## Monitoring and limitations
 

@@ -12,20 +12,20 @@ def engineer_features(frame: pd.DataFrame, sensors: list[str] | None = None) -> 
     if missing:
         raise ValueError(f"Missing columns: {', '.join(sorted(missing))}")
     f = frame.sort_values(["engine_id", "cycle"]).copy()
-    result = pd.DataFrame(index=f.index)
-    result["cycle"] = f["cycle"].astype(float)
+    feature_columns = {"cycle": f["cycle"].astype(float)}
     # Do not normalize by engine lifetime: the failure cycle is unknown at inference.
-    result["log_cycle"] = np.log1p(f["cycle"].astype(float))
+    feature_columns["log_cycle"] = np.log1p(f["cycle"].astype(float))
     for col in sensors:
         s = f[col].astype(float)
         g = f.assign(_v=s).groupby("engine_id", sort=False)["_v"]
-        result[f"{col}_current"] = s
-        result[f"{col}_mean_life"] = g.expanding().mean().reset_index(level=0, drop=True).reindex(f.index)
-        result[f"{col}_std_life"] = g.expanding().std().reset_index(level=0, drop=True).reindex(f.index).fillna(0)
+        feature_columns[f"{col}_current"] = s
+        feature_columns[f"{col}_mean_life"] = g.expanding().mean().reset_index(level=0, drop=True).reindex(f.index)
+        feature_columns[f"{col}_std_life"] = g.expanding().std().reset_index(level=0, drop=True).reindex(f.index).fillna(0)
         for w in WINDOWS:
-            result[f"{col}_mean_{w}"] = g.rolling(w, min_periods=1).mean().reset_index(level=0, drop=True).reindex(f.index)
-            result[f"{col}_std_{w}"] = g.rolling(w, min_periods=2).std().reset_index(level=0, drop=True).reindex(f.index).fillna(0)
-        result[f"{col}_trend_10"] = g.diff(10).fillna(0) / 10.0
+            feature_columns[f"{col}_mean_{w}"] = g.rolling(w, min_periods=1).mean().reset_index(level=0, drop=True).reindex(f.index)
+            feature_columns[f"{col}_std_{w}"] = g.rolling(w, min_periods=2).std().reset_index(level=0, drop=True).reindex(f.index).fillna(0)
+        feature_columns[f"{col}_trend_10"] = g.diff(10).fillna(0) / 10.0
+    result = pd.DataFrame(feature_columns, index=f.index)
     return result.replace([np.inf, -np.inf], 0).fillna(0).sort_index()
 
 def latest_engine_features(history: pd.DataFrame, sensors: list[str] | None = None) -> pd.DataFrame:

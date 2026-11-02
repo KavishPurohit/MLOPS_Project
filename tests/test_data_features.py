@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from src.data import add_training_rul, attach_test_rul
+from src.data import add_training_rul, attach_test_rul, load_subset
 from src.features import engineer_features, latest_engine_features, SequentialFeatureEngineer
 from src.metrics import regression_metrics, nasa_score
 
@@ -51,3 +51,7 @@ def test_metrics_and_asymmetric_score():
     assert m["mae"]==pytest.approx(1/3)
     assert m["rmse"]==pytest.approx(1/np.sqrt(3))
     assert nasa_score([10],[8]) < nasa_score([10],[12])
+
+def test_subset_selector_rejects_unknown_filesets():
+    with pytest.raises(ValueError,match="FD001, FD002"):
+        load_subset("FD005", "missing")

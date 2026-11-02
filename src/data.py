@@ -22,17 +22,25 @@ def load_partition(path: str | Path) -> pd.DataFrame:
         raise ValueError(f"Non-finite sensor values found in {path.name}.")
     return df.sort_values(["engine_id", "cycle"]).reset_index(drop=True)
 
-def load_fd001(raw_dir: str | Path = RAW_DIR) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
+def load_subset(subset: str = "FD001", raw_dir: str | Path = RAW_DIR) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
+    """Load any NASA subset that follows the common FD001–FD004 file contract."""
+    subset = subset.upper()
+    if subset not in {"FD001", "FD002", "FD003", "FD004"}:
+        raise ValueError("subset must be one of FD001, FD002, FD003, or FD004")
     raw_dir = Path(raw_dir)
-    train = load_partition(raw_dir / "train_FD001.txt")
-    test = load_partition(raw_dir / "test_FD001.txt")
-    rul_path = raw_dir / "RUL_FD001.txt"
+    train = load_partition(raw_dir / f"train_{subset}.txt")
+    test = load_partition(raw_dir / f"test_{subset}.txt")
+    rul_path = raw_dir / f"RUL_{subset}.txt"
     if not rul_path.exists():
         raise FileNotFoundError(f"Missing {rul_path.name}; NASA test labels are required for evaluation.")
     test_rul = pd.read_csv(rul_path, sep=r"\s+", header=None).iloc[:, 0].to_numpy(dtype=float)
     if len(test_rul) != test.engine_id.nunique():
         raise ValueError("RUL_FD001.txt must contain one label per test engine, in engine-id order.")
     return train, test, test_rul
+
+def load_fd001(raw_dir: str | Path = RAW_DIR) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray]:
+    """FD001 convenience wrapper used by the starter experiment and dashboard."""
+    return load_subset("FD001", raw_dir)
 
 def add_training_rul(train: pd.DataFrame, cap: int | None = None) -> pd.DataFrame:
     out = train.copy()
